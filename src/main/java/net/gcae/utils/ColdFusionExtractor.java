@@ -1,28 +1,27 @@
 package net.gcae.utils;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import net.gcae.utils.analyzer.ColdFusionAnalyzer;
 import net.gcae.utils.model.AnalysisResult;
 import net.gcae.utils.report.HTMLReportGenerator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 public class ColdFusionExtractor {
-    private static final Logger logger = LoggerFactory.getLogger(ColdFusionExtractor.class);
-    
-    public static void main(String[] args) {
-        if (args.length < 1) {
-            System.err.println("Uso: java -jar coldfusion-extractor.jar <directorio_aplicacion> [archivo_reporte]");
-            System.err.println("Ejemplo: java -jar coldfusion-extractor.jar /path/to/cf/app report.html");
-            System.exit(1);
-        }
-        
-        String appDirectoryPath = args[0];
+	private static final Logger logger = LoggerFactory.getLogger(ColdFusionExtractor.class);
+
+	public static void main(String[] args) {
+		if (args.length < 1) {
+			System.err.println("Uso: java -jar coldfusion-extractor.jar <directorio_aplicacion> [archivo_reporte]");
+			System.err.println("Ejemplo: java -jar coldfusion-extractor.jar /path/to/cf/app report.html");
+			System.exit(1);
+		}
+		
+		String appDirectoryPath = args[0];
         String reportPath = args.length > 1 ? args[1] : "coldfusion-analysis-report.html";
         
         try {
@@ -51,5 +50,9 @@ public class ColdFusionExtractor {
             System.err.println("Error: " + e.getMessage());
             System.exit(1);
         }
-    }
+	}
+
+
+
+
 }

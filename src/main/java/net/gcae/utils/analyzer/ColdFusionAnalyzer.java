@@ -78,12 +78,13 @@ public class ColdFusionAnalyzer {
         
         try (Stream<Path> paths = Files.walk(basePath)) {
             paths.filter(Files::isRegularFile)
+                 .filter(path -> !isExcludedFile(path))
                  .forEach(path -> {
                      try {
                          FileInfo fileInfo = createFileInfo(path, basePath);
                          files.add(fileInfo);
                      } catch (IOException e) {
-                         logger.warn("Error procesando archivo: {}", path, e);
+                         logger.warn("Error procesando archivo: {} - {}", path, e.getMessage());
                      }
                  });
         }
@@ -91,20 +92,79 @@ public class ColdFusionAnalyzer {
         return files;
     }
     
+    /**
+     * Verifica si un archivo debe ser excluido del análisis
+     */
+    private boolean isExcludedFile(Path path) {
+        String fileName = path.getFileName().toString().toLowerCase();
+        String pathStr = path.toString().toLowerCase();
+        
+        // Excluir archivos binarios comunes
+        if (fileName.endsWith(".exe") || fileName.endsWith(".dll") || 
+            fileName.endsWith(".so") || fileName.endsWith(".dylib") ||
+            fileName.endsWith(".jar") || fileName.endsWith(".war") ||
+            fileName.endsWith(".zip") || fileName.endsWith(".rar") ||
+            fileName.endsWith(".pdf") || fileName.endsWith(".doc") ||
+            fileName.endsWith(".docx") || fileName.endsWith(".xls") ||
+            fileName.endsWith(".xlsx") || fileName.endsWith(".ppt") ||
+            fileName.endsWith(".pptx") || fileName.endsWith(".jpg") ||
+            fileName.endsWith(".jpeg") || fileName.endsWith(".png") ||
+            fileName.endsWith(".gif") || fileName.endsWith(".bmp") ||
+            fileName.endsWith(".ico") || fileName.endsWith(".svg") ||
+            fileName.endsWith(".mp3") || fileName.endsWith(".mp4") ||
+            fileName.endsWith(".avi") || fileName.endsWith(".mov")) {
+            return true;
+        }
+        
+        // Excluir directorios comunes
+        if (pathStr.contains("/.git/") || pathStr.contains("\\.git\\") ||
+            pathStr.contains("/node_modules/") || pathStr.contains("\\node_modules\\") ||
+            pathStr.contains("/target/") || pathStr.contains("\\target\\") ||
+            pathStr.contains("/bin/") || pathStr.contains("\\bin\\") ||
+            pathStr.contains("/obj/") || pathStr.contains("\\obj\\") ||
+            pathStr.contains("/.svn/") || pathStr.contains("\\.svn\\") ||
+            pathStr.contains("/logs/") || pathStr.contains("\\logs\\") ||
+            pathStr.contains("/temp/") || pathStr.contains("\\temp\\") ||
+            pathStr.contains("/cache/") || pathStr.contains("\\cache\\")) {
+            return true;
+        }
+        
+        // Excluir archivos de configuración IDE
+        if (fileName.equals(".ds_store") || fileName.equals("thumbs.db") ||
+            fileName.startsWith(".idea") || fileName.startsWith(".vscode") ||
+            fileName.endsWith(".iml") || fileName.endsWith(".suo") ||
+            fileName.endsWith(".user") || fileName.endsWith(".tmp") ||
+            fileName.endsWith(".temp") || fileName.endsWith(".log") ||
+            fileName.endsWith(".bak") || fileName.endsWith("~")) {
+            return true;
+        }
+        
+        return false;
+    }
+    
     private FileInfo createFileInfo(Path filePath, Path basePath) throws IOException {
         String relativePath = basePath.relativize(filePath).toString();
         FileInfo fileInfo = new FileInfo(filePath, relativePath);
         
-        BasicFileAttributes attrs = Files.readAttributes(filePath, BasicFileAttributes.class);
-        fileInfo.setFileSize(attrs.size());
-        fileInfo.setLastModified(LocalDateTime.ofInstant(attrs.lastModifiedTime().toInstant(), ZoneId.systemDefault()));
-        
-        // Contar líneas
         try {
-            long lineCount = Files.lines(filePath).count();
-            fileInfo.setLineCount((int) lineCount);
+            BasicFileAttributes attrs = Files.readAttributes(filePath, BasicFileAttributes.class);
+            fileInfo.setFileSize(attrs.size());
+            fileInfo.setLastModified(LocalDateTime.ofInstant(attrs.lastModifiedTime().toInstant(), ZoneId.systemDefault()));
+            
+            // Contar líneas con manejo de encoding
+            try {
+                String content = readFileWithFallbackEncoding(filePath.toFile());
+                long lineCount = content.split("\n").length;
+                fileInfo.setLineCount((int) lineCount);
+            } catch (IOException e) {
+                logger.warn("No se pudo contar líneas en: {} - {}", filePath, e.getMessage());
+                fileInfo.setLineCount(0);
+            }
+            
         } catch (IOException e) {
-            logger.warn("No se pudo contar líneas en: {}", filePath, e);
+            logger.warn("Error procesando metadatos de archivo: {} - {}", filePath, e.getMessage());
+            fileInfo.setFileSize(0);
+            fileInfo.setLastModified(LocalDateTime.now());
             fileInfo.setLineCount(0);
         }
         
@@ -113,7 +173,7 @@ public class ColdFusionAnalyzer {
     
     private void analyzeFile(FileInfo fileInfo, AnalysisResult result) {
         try {
-            String content = FileUtils.readFileToString(fileInfo.getFilePath().toFile(), "UTF-8");
+            String content = readFileWithFallbackEncoding(fileInfo.getFilePath().toFile());
             String fileName = fileInfo.getRelativePath();
             
             // Analizar queries
@@ -264,27 +324,27 @@ public class ColdFusionAnalyzer {
     
     private boolean isFunctionUsedInFile(FunctionInfo function, FileInfo file) {
         try {
-            String content = FileUtils.readFileToString(file.getFilePath().toFile(), "UTF-8");
+            String content = readFileWithFallbackEncoding(file.getFilePath().toFile());
             String functionName = function.getFunctionName();
             if (functionName != null && !functionName.isEmpty()) {
                 return content.contains(functionName + "(");
             }
         } catch (IOException e) {
-            logger.warn("Error verificando uso de función en archivo: {}", file.getFilePath(), e);
+            logger.warn("Error verificando uso de función en archivo: {} - {}", file.getFilePath(), e.getMessage());
         }
         return false;
     }
     
     private boolean isComponentUsedInFile(ComponentInfo component, FileInfo file) {
         try {
-            String content = FileUtils.readFileToString(file.getFilePath().toFile(), "UTF-8");
+            String content = readFileWithFallbackEncoding(file.getFilePath().toFile());
             String componentName = component.getComponentName();
             if (componentName != null && !componentName.isEmpty()) {
                 return content.contains(componentName) || 
                        content.contains("createObject(\"component\", \"" + componentName + "\")");
             }
         } catch (IOException e) {
-            logger.warn("Error verificando uso de componente en archivo: {}", file.getFilePath(), e);
+            logger.warn("Error verificando uso de componente en archivo: {} - {}", file.getFilePath(), e.getMessage());
         }
         return false;
     }
@@ -306,4 +366,81 @@ public class ColdFusionAnalyzer {
         }
         return name;
     }
+    
+	private String readFileWithFallbackEncoding(File file) throws IOException {
+		String[] encodings = { "UTF-8", "ISO-8859-1", "Windows-1252", "UTF-16", "UTF-16BE", "UTF-16LE", "US-ASCII" };
+
+		for (String encoding : encodings) {
+			try {
+				return FileUtils.readFileToString(file, encoding);
+			} catch (IOException e) {
+				logger.debug("No se pudo leer archivo {} con encoding {}: {}", file.getPath(), encoding,
+						e.getMessage());
+
+			}
+		}
+
+
+		logger.warn("No se pudo leer archivo {} con encodings estándar, usando lectura de bytes", file.getPath());
+		try {
+			byte[] bytes = FileUtils.readFileToByteArray(file);
+			return cleanBytesToString(bytes);
+		} catch (IOException e) {
+			logger.error("Error crítico leyendo archivo {}: {}", file.getPath(), e.getMessage());
+			throw new IOException("No se pudo leer el archivo: " + file.getPath(), e);
+		}
+	}
+
+
+	private String cleanBytesToString(byte[] bytes) {
+		StringBuilder sb = new StringBuilder();
+		for (byte b : bytes) {
+			char c = (char) (b & 0xFF);
+
+			if (c >= 32 && c <= 126) {
+				sb.append(c);
+			} else if (c == '\n' || c == '\r' || c == '\t') {
+				sb.append(c);
+			} else if (c >= 160 && c <= 255) {
+				sb.append(c);
+			} else {
+				sb.append(' ');
+			}
+		}
+		return sb.toString();
+	}
+
+	private String detectFileEncoding(File file) {
+		try {
+			byte[] bytes = FileUtils.readFileToByteArray(file);
+
+			if (bytes.length >= 3 && bytes[0] == (byte) 0xEF && bytes[1] == (byte) 0xBB && bytes[2] == (byte) 0xBF) {
+				return "UTF-8";
+			}
+			if (bytes.length >= 2 && bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE) {
+				return "UTF-16LE";
+			}
+			if (bytes.length >= 2 && bytes[0] == (byte) 0xFE && bytes[1] == (byte) 0xFF) {
+				return "UTF-16BE";
+			}
+
+			boolean possibleUTF8 = true;
+			for (int i = 0; i < Math.min(bytes.length, 1000); i++) {
+				if ((bytes[i] & 0xFF) > 127) {
+					possibleUTF8 = false;
+					break;
+				}
+			}
+
+			if (possibleUTF8) {
+				return "UTF-8";
+			}
+
+			return "ISO-8859-1";
+
+		} catch (IOException e) {
+			logger.debug("No se pudo detectar encoding para {}: {}", file.getPath(), e.getMessage());
+			return "UTF-8"; // Default
+		}
+	}
 }
