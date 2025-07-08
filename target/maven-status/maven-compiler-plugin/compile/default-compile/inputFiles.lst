@@ -1,0 +1,12 @@
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/Main.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/model/AnalysisResult.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/model/InvokeInfo.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/report/HTMLReportGenerator.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/analyzer/ColdFusionAnalyzer.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/ColdFusionExtractor.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/model/FileInfo.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/model/IncludeInfo.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/model/ModuleInfo.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/model/ComponentInfo.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/model/QueryInfo.java
+/Users/antonio.sanchez/workarea/repos/empower/coldfusion-extractor/cfextractor/src/main/java/net/gcae/utils/model/FunctionInfo.java
