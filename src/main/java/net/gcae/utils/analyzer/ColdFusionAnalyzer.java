@@ -31,7 +31,8 @@ public class ColdFusionAnalyzer {
     private static final Logger logger = LoggerFactory.getLogger(ColdFusionAnalyzer.class);
     
     private static final Set<String> CF_EXTENSIONS = Set.of("cfm", "cfml", "cfc");
-    private static final Pattern CFQUERY_PATTERN = Pattern.compile("<cfquery\\s+([^>]*)>([\\s\\S]*?)</cfquery>", Pattern.CASE_INSENSITIVE);
+    // Pattern to capture more SQL content including multi-line queries
+    private static final Pattern CFQUERY_PATTERN = Pattern.compile("<cfquery\\s+([^>]*)>([\\s\\S]*?)</cfquery>", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE | Pattern.DOTALL);
     private static final Pattern CFFUNCTION_PATTERN = Pattern.compile("<cffunction\\s+([^>]*)>", Pattern.CASE_INSENSITIVE);
     private static final Pattern CFCOMPONENT_PATTERN = Pattern.compile("<cfcomponent\\s+([^>]*)>", Pattern.CASE_INSENSITIVE);
     private static final Pattern CFINVOKE_PATTERN = Pattern.compile("<cfinvoke\\s+([^>]*)/?>");
@@ -45,11 +46,9 @@ public class ColdFusionAnalyzer {
         result.setApplicationPath(appDirectory.getAbsolutePath());
         result.setAnalysisDate(LocalDateTime.now());
         
-        // Obtener todos los archivos
         List<FileInfo> files = scanFiles(appDirectory);
         result.setFiles(files);
         
-        // Analizar contenido de archivos ColdFusion
         result.setQueries(new ArrayList<>());
         result.setFunctions(new ArrayList<>());
         result.setComponents(new ArrayList<>());
@@ -63,7 +62,6 @@ public class ColdFusionAnalyzer {
             }
         }
         
-        // Analizar dependencias
         analyzeDependencies(result);
         
         logger.info("Análisis completado: {} archivos, {} queries, {} funciones, {} componentes", 
@@ -151,7 +149,6 @@ public class ColdFusionAnalyzer {
             fileInfo.setFileSize(attrs.size());
             fileInfo.setLastModified(LocalDateTime.ofInstant(attrs.lastModifiedTime().toInstant(), ZoneId.systemDefault()));
             
-            // Contar líneas con manejo de encoding
             try {
                 String content = readFileWithFallbackEncoding(filePath.toFile());
                 long lineCount = content.split("\n").length;
@@ -213,8 +210,64 @@ public class ColdFusionAnalyzer {
             query.setQueryName(extractAttribute(attributes, "name"));
             query.setDatasource(extractAttribute(attributes, "datasource"));
             
+            // Extract database table from SQL
+            String dbTable = extractTableFromSQL(sql);
+            query.setDbTable(dbTable);
+            
             result.getQueries().add(query);
         }
+    }
+    
+    /**
+     * Extract table name from SQL query
+     */
+    private String extractTableFromSQL(String sql) {
+        if (sql == null || sql.trim().isEmpty()) {
+            return "N/A";
+        }
+        
+        // Clean SQL - remove extra whitespace and normalize
+        String cleanSql = sql.replaceAll("\\s+", " ").trim().toLowerCase();
+        
+        // Patterns to match different SQL constructs
+        String[] patterns = {
+            // SELECT FROM table
+            "from\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            // INSERT INTO table
+            "insert\\s+into\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            // UPDATE table
+            "update\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            // DELETE FROM table
+            "delete\\s+from\\s+([a-zA-Z_][a-zA-Z0-9_]*)"
+        };
+        
+        for (String patternStr : patterns) {
+            Pattern pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(cleanSql);
+            if (matcher.find()) {
+                String tableName = matcher.group(1);
+                // Handle schema.table format
+                if (tableName.contains(".")) {
+                    String[] parts = tableName.split("\\.");
+                    return parts[parts.length - 1]; // Return table name only
+                }
+                return tableName;
+            }
+        }
+        
+        // Try to extract from JOIN clauses
+        Pattern joinPattern = Pattern.compile("join\\s+([a-zA-Z_][a-zA-Z0-9_]*)", Pattern.CASE_INSENSITIVE);
+        Matcher joinMatcher = joinPattern.matcher(cleanSql);
+        if (joinMatcher.find()) {
+            String tableName = joinMatcher.group(1);
+            if (tableName.contains(".")) {
+                String[] parts = tableName.split("\\.");
+                return parts[parts.length - 1];
+            }
+            return tableName;
+        }
+        
+        return "Unknown";
     }
     
     private void analyzeFunctions(String content, String fileName, AnalysisResult result) {
@@ -367,80 +420,106 @@ public class ColdFusionAnalyzer {
         return name;
     }
     
-	private String readFileWithFallbackEncoding(File file) throws IOException {
-		String[] encodings = { "UTF-8", "ISO-8859-1", "Windows-1252", "UTF-16", "UTF-16BE", "UTF-16LE", "US-ASCII" };
-
-		for (String encoding : encodings) {
-			try {
-				return FileUtils.readFileToString(file, encoding);
-			} catch (IOException e) {
-				logger.debug("No se pudo leer archivo {} con encoding {}: {}", file.getPath(), encoding,
-						e.getMessage());
-
-			}
-		}
-
-
-		logger.warn("No se pudo leer archivo {} con encodings estándar, usando lectura de bytes", file.getPath());
-		try {
-			byte[] bytes = FileUtils.readFileToByteArray(file);
-			return cleanBytesToString(bytes);
-		} catch (IOException e) {
-			logger.error("Error crítico leyendo archivo {}: {}", file.getPath(), e.getMessage());
-			throw new IOException("No se pudo leer el archivo: " + file.getPath(), e);
-		}
-	}
-
-
-	private String cleanBytesToString(byte[] bytes) {
-		StringBuilder sb = new StringBuilder();
-		for (byte b : bytes) {
-			char c = (char) (b & 0xFF);
-
-			if (c >= 32 && c <= 126) {
-				sb.append(c);
-			} else if (c == '\n' || c == '\r' || c == '\t') {
-				sb.append(c);
-			} else if (c >= 160 && c <= 255) {
-				sb.append(c);
-			} else {
-				sb.append(' ');
-			}
-		}
-		return sb.toString();
-	}
-
-	private String detectFileEncoding(File file) {
-		try {
-			byte[] bytes = FileUtils.readFileToByteArray(file);
-
-			if (bytes.length >= 3 && bytes[0] == (byte) 0xEF && bytes[1] == (byte) 0xBB && bytes[2] == (byte) 0xBF) {
-				return "UTF-8";
-			}
-			if (bytes.length >= 2 && bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE) {
-				return "UTF-16LE";
-			}
-			if (bytes.length >= 2 && bytes[0] == (byte) 0xFE && bytes[1] == (byte) 0xFF) {
-				return "UTF-16BE";
-			}
-
-			boolean possibleUTF8 = true;
-			for (int i = 0; i < Math.min(bytes.length, 1000); i++) {
-				if ((bytes[i] & 0xFF) > 127) {
-					possibleUTF8 = false;
-					break;
-				}
-			}
-
-			if (possibleUTF8) {
-				return "UTF-8";
-			}
-
-			return "ISO-8859-1";
-
-		} catch (IOException e) {
-			logger.debug("No se pudo detectar encoding para {}: {}", file.getPath(), e.getMessage());
-			return "UTF-8"; // Default
-		}
-	}
+    /**
+     * Lee un archivo con manejo de múltiples encodings como fallback
+     */
+    private String readFileWithFallbackEncoding(File file) throws IOException {
+        // Lista de encodings a probar en orden
+        String[] encodings = {
+            "UTF-8",
+            "ISO-8859-1",
+            "Windows-1252",
+            "UTF-16",
+            "UTF-16BE",
+            "UTF-16LE",
+            "US-ASCII"
+        };
+        
+        for (String encoding : encodings) {
+            try {
+                return FileUtils.readFileToString(file, encoding);
+            } catch (IOException e) {
+                logger.debug("No se pudo leer archivo {} con encoding {}: {}", 
+                           file.getPath(), encoding, e.getMessage());
+                // Continúa con el siguiente encoding
+            }
+        }
+        
+        // Si ningún encoding funciona, intenta leer como bytes y limpiar caracteres problemáticos
+        logger.warn("No se pudo leer archivo {} con encodings estándar, usando lectura de bytes", file.getPath());
+        try {
+            byte[] bytes = FileUtils.readFileToByteArray(file);
+            return cleanBytesToString(bytes);
+        } catch (IOException e) {
+            logger.error("Error crítico leyendo archivo {}: {}", file.getPath(), e.getMessage());
+            throw new IOException("No se pudo leer el archivo: " + file.getPath(), e);
+        }
+    }
+    
+    /**
+     * Convierte bytes a string limpiando caracteres problemáticos
+     */
+    private String cleanBytesToString(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            // Convertir byte a char, reemplazando caracteres problemáticos
+            char c = (char) (b & 0xFF);
+            
+            // Mantener solo caracteres imprimibles y algunos de control
+            if (c >= 32 && c <= 126) {
+                // ASCII imprimible
+                sb.append(c);
+            } else if (c == '\n' || c == '\r' || c == '\t') {
+                // Caracteres de control permitidos
+                sb.append(c);
+            } else if (c >= 160 && c <= 255) {
+                // Caracteres extendidos Latin-1
+                sb.append(c);
+            } else {
+                // Reemplazar caracteres problemáticos con espacio
+                sb.append(' ');
+            }
+        }
+        return sb.toString();
+    }
+    
+    /**
+     * Detecta automáticamente el encoding de un archivo
+     */
+    private String detectFileEncoding(File file) {
+        try {
+            byte[] bytes = FileUtils.readFileToByteArray(file);
+            
+            // Detectar BOM (Byte Order Mark)
+            if (bytes.length >= 3 && bytes[0] == (byte) 0xEF && bytes[1] == (byte) 0xBB && bytes[2] == (byte) 0xBF) {
+                return "UTF-8";
+            }
+            if (bytes.length >= 2 && bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE) {
+                return "UTF-16LE";
+            }
+            if (bytes.length >= 2 && bytes[0] == (byte) 0xFE && bytes[1] == (byte) 0xFF) {
+                return "UTF-16BE";
+            }
+            
+            // Heurística simple para detectar UTF-8
+            boolean possibleUTF8 = true;
+            for (int i = 0; i < Math.min(bytes.length, 1000); i++) {
+                if ((bytes[i] & 0xFF) > 127) {
+                    possibleUTF8 = false;
+                    break;
+                }
+            }
+            
+            if (possibleUTF8) {
+                return "UTF-8";
+            }
+            
+            // Default fallback
+            return "ISO-8859-1";
+            
+        } catch (IOException e) {
+            logger.debug("No se pudo detectar encoding para {}: {}", file.getPath(), e.getMessage());
+            return "UTF-8"; // Default
+        }
+    }
 }

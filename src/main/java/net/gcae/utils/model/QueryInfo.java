@@ -11,6 +11,7 @@ public class QueryInfo {
     private int lineNumber;
     private List<String> parameters;
     private String datasource;
+    private String dbTable;  // NEW: Database table extracted from SQL
     
     // Getters y setters
     public String getQueryName() { return queryName; }
@@ -36,4 +37,7 @@ public class QueryInfo {
     
     public String getDatasource() { return datasource; }
     public void setDatasource(String datasource) { this.datasource = datasource; }
+    
+    public String getDbTable() { return dbTable; }
+    public void setDbTable(String dbTable) { this.dbTable = dbTable; }
 }
