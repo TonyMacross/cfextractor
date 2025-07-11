@@ -474,11 +474,9 @@ public class HTMLReportGenerator {
 	        }
 	    }
 	    
-	    // Sort by DB Table first, then Query Name (ascending)
+	    // Sort by DB Table only (ascending)
 	    return groupMap.values().stream()
-	        .sorted(Comparator
-	            .comparing((QueryGroupInfo q) -> q.getDbTable() != null ? q.getDbTable() : "")
-	            .thenComparing(q -> q.getQueryName() != null ? q.getQueryName() : ""))
+	        .sorted(Comparator.comparing(q -> q.getDbTable() != null ? q.getDbTable() : ""))
 	        .collect(Collectors.toList());
 	}
 
