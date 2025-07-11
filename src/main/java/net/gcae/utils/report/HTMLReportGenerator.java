@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -14,7 +16,15 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.gcae.utils.model.*;
+import net.gcae.utils.model.AnalysisResult;
+import net.gcae.utils.model.ComponentInfo;
+import net.gcae.utils.model.FileInfo;
+import net.gcae.utils.model.FunctionInfo;
+import net.gcae.utils.model.IncludeInfo;
+import net.gcae.utils.model.InvokeInfo;
+import net.gcae.utils.model.ModuleInfo;
+import net.gcae.utils.model.QueryGroupInfo;
+import net.gcae.utils.model.QueryInfo;
 
 public class HTMLReportGenerator {
 	private static final Logger logger = LoggerFactory.getLogger(HTMLReportGenerator.class);
@@ -86,21 +96,6 @@ public class HTMLReportGenerator {
 		Path reportPath = outputDirectory.resolve("cfFilesReport.html");
 		Files.write(reportPath, reportContent.getBytes("UTF-8"));
 		logger.info("Generated file report: {}", reportPath.getFileName());
-		return 1;
-	}
-
-	private int generateQueryReport(AnalysisResult result, Path outputDirectory) throws IOException {
-		if (result.getQueries().isEmpty()) {
-			logger.info("No queries found - skipping cfQueriesReport.html");
-			return 0;
-		}
-
-		String reportContent = generateSingleReport("SQL Queries Report", "ColdFusion Queries Analysis", result,
-				generateQueryInventoryTable(result.getQueries()));
-
-		Path reportPath = outputDirectory.resolve("cfQueriesReport.html");
-		Files.write(reportPath, reportContent.getBytes("UTF-8"));
-		logger.info("Generated queries report: {}", reportPath.getFileName());
 		return 1;
 	}
 
@@ -203,24 +198,6 @@ public class HTMLReportGenerator {
 		return getTemplate("html.files").replace("${fileRows}", fileRows).replace("${totalFiles}",
 				String.valueOf(files.size()));
 	}
-
-    private String generateQueryInventoryTable(List<QueryInfo> queries) {
-        String queryRows = queries.stream()
-            .map(query -> getTemplate("queries.row")
-                .replace("${queryName}", StringUtils.defaultString(query.getQueryName(), "Unnamed"))
-                .replace("${fileName}", query.getFileName())
-                .replace("${lineNumber}", String.valueOf(query.getLineNumber()))
-                .replace("${datasource}", StringUtils.defaultString(query.getDatasource(), "N/A"))
-                .replace("${dbTable}", StringUtils.defaultString(query.getDbTable(), "Unknown"))
-                .replace("${sqlPreview}", StringUtils.abbreviate(StringUtils.defaultString(query.getSql(), ""), 150))
-                .replace("${functionName}", StringUtils.defaultString(query.getFunctionName(), "N/A"))
-                .replace("${componentName}", StringUtils.defaultString(query.getComponentName(), "N/A")))
-            .collect(Collectors.joining("\n"));
-        
-        return getTemplate("html.queries")
-            .replace("${queryRows}", queryRows)
-            .replace("${totalQueries}", String.valueOf(queries.size()));
-    }
 
 	private String generateFunctionInventoryTable(List<FunctionInfo> functions) {
 		String functionRows = functions.stream()
@@ -458,6 +435,68 @@ public class HTMLReportGenerator {
 
 	private String generateFooter() {
 		return getTemplate("html.footer");
+	}
+	
+	private int generateQueryReport(AnalysisResult result, Path outputDirectory) throws IOException {
+	    if (result.getQueries().isEmpty()) {
+	        logger.info("No queries found - skipping cfQueriesReport.html");
+	        return 0;
+	    }
+
+	    // Group queries by name, function, and component (excluding file to allow multiple files)
+	    List<QueryGroupInfo> groupedQueries = groupQueries(result.getQueries());
+
+	    String reportContent = generateSingleReport("SQL Queries Report", "ColdFusion Queries Analysis", result,
+	            generateQueryInventoryTable(groupedQueries));
+
+	    Path reportPath = outputDirectory.resolve("cfQueriesReport.html");
+	    Files.write(reportPath, reportContent.getBytes("UTF-8"));
+	    logger.info("Generated queries report: {} with {} unique query groups", reportPath.getFileName(), groupedQueries.size());
+	    return 1;
+	}
+
+	/**
+	 * Groups queries by name only
+	 */
+	private List<QueryGroupInfo> groupQueries(List<QueryInfo> queries) {
+	    Map<String, QueryGroupInfo> groupMap = new HashMap<>();
+	    
+	    for (QueryInfo query : queries) {
+	        QueryGroupInfo groupInfo = new QueryGroupInfo(query);
+	        String key = groupInfo.getGroupingKey();
+	        
+	        if (groupMap.containsKey(key)) {
+	            // Increment counter and add file:line and SQL for existing group
+	            groupMap.get(key).incrementExecutionCount(query.getFileName(), query.getLineNumber(), query.getSql());
+	        } else {
+	            // Add new group
+	            groupMap.put(key, groupInfo);
+	        }
+	    }
+	    
+	    // Sort by DB Table first, then Query Name (ascending)
+	    return groupMap.values().stream()
+	        .sorted(Comparator
+	            .comparing((QueryGroupInfo q) -> q.getDbTable() != null ? q.getDbTable() : "")
+	            .thenComparing(q -> q.getQueryName() != null ? q.getQueryName() : ""))
+	        .collect(Collectors.toList());
+	}
+
+	// Método sobrecargado para manejar QueryGroupInfo
+	private String generateQueryInventoryTable(List<QueryGroupInfo> queryGroups) {
+	    String queryRows = queryGroups.stream()
+	        .map(queryGroup -> getTemplate("queries.row")
+	            .replace("${queryName}", StringUtils.defaultString(queryGroup.getQueryName(), "Unnamed"))
+	            .replace("${fileLines}", queryGroup.getFormattedFileNames())
+	            .replace("${datasource}", StringUtils.defaultString(queryGroup.getDatasource(), "N/A"))
+	            .replace("${dbTable}", StringUtils.defaultString(queryGroup.getDbTable(), "Unknown"))
+	            .replace("${sqlExtracts}", queryGroup.getFormattedSqlExtracts())
+	            .replace("${executionCount}", String.valueOf(queryGroup.getExecutionCount())))
+	        .collect(Collectors.joining("\n"));
+	    
+	    return getTemplate("html.queries")
+	        .replace("${queryRows}", queryRows)
+	        .replace("${totalQueries}", String.valueOf(queryGroups.size()));
 	}
 
 }

@@ -18,14 +18,8 @@ import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.gcae.utils.model.AnalysisResult;
-import net.gcae.utils.model.ComponentInfo;
-import net.gcae.utils.model.FileInfo;
-import net.gcae.utils.model.FunctionInfo;
-import net.gcae.utils.model.IncludeInfo;
-import net.gcae.utils.model.InvokeInfo;
-import net.gcae.utils.model.ModuleInfo;
-import net.gcae.utils.model.QueryInfo;
+import net.gcae.utils.model.*;
+
 
 public class ColdFusionAnalyzer {
     private static final Logger logger = LoggerFactory.getLogger(ColdFusionAnalyzer.class);
@@ -483,43 +477,4 @@ public class ColdFusionAnalyzer {
         return sb.toString();
     }
     
-    /**
-     * Detecta automáticamente el encoding de un archivo
-     */
-    private String detectFileEncoding(File file) {
-        try {
-            byte[] bytes = FileUtils.readFileToByteArray(file);
-            
-            // Detectar BOM (Byte Order Mark)
-            if (bytes.length >= 3 && bytes[0] == (byte) 0xEF && bytes[1] == (byte) 0xBB && bytes[2] == (byte) 0xBF) {
-                return "UTF-8";
-            }
-            if (bytes.length >= 2 && bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xFE) {
-                return "UTF-16LE";
-            }
-            if (bytes.length >= 2 && bytes[0] == (byte) 0xFE && bytes[1] == (byte) 0xFF) {
-                return "UTF-16BE";
-            }
-            
-            // Heurística simple para detectar UTF-8
-            boolean possibleUTF8 = true;
-            for (int i = 0; i < Math.min(bytes.length, 1000); i++) {
-                if ((bytes[i] & 0xFF) > 127) {
-                    possibleUTF8 = false;
-                    break;
-                }
-            }
-            
-            if (possibleUTF8) {
-                return "UTF-8";
-            }
-            
-            // Default fallback
-            return "ISO-8859-1";
-            
-        } catch (IOException e) {
-            logger.debug("No se pudo detectar encoding para {}: {}", file.getPath(), e.getMessage());
-            return "UTF-8"; // Default
-        }
-    }
 }
