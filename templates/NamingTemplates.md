@@ -1,5 +1,3 @@
-Por supuesto, aquí está la traducción de la nomenclatura de archivos al inglés, manteniendo la misma estructura y formato.
-
 📂 03_Analysis
 Business_Analysis
 Business_Process_Diagrams/
