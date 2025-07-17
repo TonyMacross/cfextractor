@@ -275,4 +275,4 @@ Start migration by analyzing [SPECIFIC_CFC_FILE] and convert it to complete Java
 - [ ] API documentation (OpenAPI/Swagger)
 - [ ] Performance optimization applied
 - [ ] Logging and monitoring configured
-- [ ] Environment-specific configurations
+- [ ] Environment-specific configurationsMigrat
