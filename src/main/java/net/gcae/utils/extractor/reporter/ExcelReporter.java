@@ -349,7 +349,14 @@ public class ExcelReporter {
     
     private void createDataCell(Row row, int column, String value) {
         Cell cell = row.createCell(column);
-        cell.setCellValue(value != null ? value : "");
+        String cellValue = value != null ? value : "";
+        
+        // Excel cell limit is 32,767 characters
+        if (cellValue.length() > 32767) {
+            cellValue = cellValue.substring(0, 32764) + "...";
+        }
+        
+        cell.setCellValue(cellValue);
         cell.setCellStyle(dataStyle);
     }
 }
