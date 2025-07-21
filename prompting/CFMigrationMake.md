@@ -9,6 +9,7 @@ Perform a complete backend migration from Adobe ColdFusion to Java 21 with Sprin
 - Source: Adobe ColdFusion (CFML/CFCs)
 - Target: Java 21 + Spring Boot 3.3.x + Maven 3.9.1
 - Database: PostgreSQL on AWS Aurora with Spring Data JPA/Hibernate
+- Frontend: React 20.x with TypeScript.
 - Architecture: RESTful microservices with layered architecture
 - Security: Spring Security 6 with JWT authentication
 

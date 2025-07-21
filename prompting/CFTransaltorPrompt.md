@@ -3,7 +3,7 @@
 I need to analyze the Adobe ColdFusion application located in the `/path/to/your/coldfusion/app` directory to plan its migration to a modern technology stack.
 
 **The target architecture is:**
-* **Backend:** Java 17 with Spring Boot 3.x.
+* **Backend:** Target: Java 21 + Spring Boot 3.3.x + Maven 3.9.1
 * **Frontend:** React 20.x with TypeScript.
 * **Database:** Microsoft SQL Server (The current database is also SQL Server, so focus on analyzing interactions, not migrating the data schema itself unless you find business logic in stored procedures).
 
